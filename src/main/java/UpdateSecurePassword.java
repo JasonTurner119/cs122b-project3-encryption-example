@@ -7,75 +7,58 @@ import java.util.ArrayList;
 import org.jasypt.util.password.PasswordEncryptor;
 import org.jasypt.util.password.StrongPasswordEncryptor;
 
+// To be run only once to convert plaintext passwords to encrypted passwords.
+
 public class UpdateSecurePassword {
-
-    /*
-     * 
-     * This program updates your existing moviedb customers table to change the
-     * plain text passwords to encrypted passwords.
-     * 
-     * You should only run this program **once**, because this program uses the
-     * existing passwords as real passwords, then replace them. If you run it more
-     * than once, it will treat the encrypted passwords as real passwords and
-     * generate wrong values.
-     * 
-     */
+    
+    private static final String loginUser = "mytestuser";
+    private static final String loginPasswd = "My6$Password";
+    private static final String loginUrl = "jdbc:mysql://localhost:3306/moviedb";
+    
     public static void main(String[] args) throws Exception {
-
-        String loginUser = "mytestuser";
-        String loginPasswd = "My6$Password";
-        String loginUrl = "jdbc:mysql://localhost:3306/moviedb";
-
+        
         Class.forName("com.mysql.jdbc.Driver").newInstance();
         Connection connection = DriverManager.getConnection(loginUrl, loginUser, loginPasswd);
         Statement statement = connection.createStatement();
-
-        // change the customers table password column from VARCHAR(20) to VARCHAR(128)
+        
         String alterQuery = "ALTER TABLE customers MODIFY COLUMN password VARCHAR(128)";
         int alterResult = statement.executeUpdate(alterQuery);
         System.out.println("altering customers table schema completed, " + alterResult + " rows affected");
-
-        // get the ID and password for each customer
+        
         String query = "SELECT id, password from customers";
-
-        ResultSet rs = statement.executeQuery(query);
-
-        // we use the StrongPasswordEncryptor from jasypt library (Java Simplified Encryption) 
-        //  it internally use SHA-256 algorithm and 10,000 iterations to calculate the encrypted password
+        
+        System.out.println("Retrieving Old Passwords.");
+        ResultSet resultSet = statement.executeQuery(query);
+        
         PasswordEncryptor passwordEncryptor = new StrongPasswordEncryptor();
-
         ArrayList<String> updateQueryList = new ArrayList<>();
-
-        System.out.println("encrypting password (this might take a while)");
-        while (rs.next()) {
-            // get the ID and plain text password from current table
-            String id = rs.getString("id");
-            String password = rs.getString("password");
+        
+        System.out.println("Encrypting Passwords.");
+        while (resultSet.next()) {
+            String id = resultSet.getString("id");
+            String password = resultSet.getString("password");
             
-            // encrypt the password using StrongPasswordEncryptor
             String encryptedPassword = passwordEncryptor.encryptPassword(password);
-
-            // generate the update query
-            String updateQuery = String.format("UPDATE customers SET password='%s' WHERE id=%s;", encryptedPassword,
-                    id);
+            
+            String updateQuery = String.format(
+                "UPDATE customers SET password = '%s' WHERE id = %s;",
+                encryptedPassword,
+                id
+            );
             updateQueryList.add(updateQuery);
         }
-        rs.close();
-
-        // execute the update queries to update the password
-        System.out.println("updating password");
+        
+        System.out.println("Setting New Passwords.");
         int count = 0;
         for (String updateQuery : updateQueryList) {
             int updateResult = statement.executeUpdate(updateQuery);
             count += updateResult;
         }
-        System.out.println("updating password completed, " + count + " rows affected");
-
+        System.out.println("Finished. " + count + " Rows Affected.");
+        
         statement.close();
         connection.close();
-
-        System.out.println("finished");
-
+        
     }
-
+    
 }
